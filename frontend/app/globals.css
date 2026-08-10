@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #edf2eb;
+  --foreground: #1C1B17;
+  --font-zilla: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-work: "Avenir Next", "Segoe UI", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(28, 91, 61, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(212, 175, 55, 0.18), transparent 22%),
+    linear-gradient(180deg, #f8faf7 0%, #edf2eb 48%, #e8efe6 100%);
+  color: var(--foreground);
+  font-family: var(--font-work), sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-zilla), serif;
+  letter-spacing: -0.01em;
+}
+
+.status-stamp {
+  transform: rotate(-4deg);
+}
+
+.status-stamp.pending {
+  transform: rotate(-3deg);
+}
+
+.status-stamp.overdue {
+  transform: rotate(-5deg);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: 0 24px 70px rgba(19, 35, 24, 0.12);
+}
+
+.glass-panel-strong {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  box-shadow: 0 26px 60px rgba(19, 35, 24, 0.16);
+}
+
+.scene-perspective {
+  perspective: 1600px;
+}
+
+.scene-card {
+  transform-style: preserve-3d;
+  animation: floatY 7s ease-in-out infinite;
+}
+
+.scene-card-fast {
+  animation-duration: 5.8s;
+}
+
+.scene-card-slow {
+  animation-duration: 9.5s;
+}
+
+.scene-card:nth-child(2) {
+  animation-delay: -1.8s;
+}
+
+.scene-card:nth-child(3) {
+  animation-delay: -3.2s;
+}
+
+.scene-card:nth-child(4) {
+  animation-delay: -4.6s;
+}
+
+.scene-orbit {
+  animation: orbit 18s linear infinite;
+}
+
+.scene-pulse {
+  animation: pulseGlow 5s ease-in-out infinite;
+}
+
+.scene-drift {
+  animation: driftX 12s ease-in-out infinite;
+}
+
+@keyframes floatY {
+  0%, 100% { transform: translate3d(0, 0, 0) rotateX(10deg) rotateY(-12deg); }
+  50% { transform: translate3d(0, -12px, 18px) rotateX(14deg) rotateY(-8deg); }
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { transform: scale(1); opacity: 0.78; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+
+@keyframes driftX {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  50% { transform: translateX(12px) translateY(-8px); }
+}
+
+@media (max-width: 640px) {
+  .scene-perspective {
+    perspective: 1100px;
+  }
+
+  .scene-card {
+    animation-duration: 8.5s;
+  }
+
+  .scene-card-fast {
+    animation-duration: 6.8s;
+  }
+
+  .scene-card-slow {
+    animation-duration: 11s;
+  }
+
+  .scene-orbit {
+    animation-duration: 24s;
+  }
+
+  .scene-pulse {
+    animation-duration: 6.5s;
+  }
+
+  .scene-drift {
+    animation-duration: 15s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-card,
+  .scene-orbit,
+  .scene-pulse,
+  .scene-drift {
+    animation: none !important;
+    transform: none !important;
+  }
+}
