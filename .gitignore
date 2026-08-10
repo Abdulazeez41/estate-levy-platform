@@ -8,3 +8,5 @@ frontend/.env.local
 backend/.env
 backend/prisma/dev.db
 pnpm-lock.yaml
+.pnpm-store/
+tsconfig.tsbuildinfo

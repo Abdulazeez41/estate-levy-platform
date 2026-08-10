@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CHAIRMAN
+  RESIDENT
+}
+
+enum LevyStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum PaymentStatus {
+  PENDING_PAYMENT
+  MANUAL_TRANSFER_SUBMITTED
+  AWAITING_CONFIRMATION
+  CONFIRMED
+  REJECTED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PAYSTACK_CARD
+  PAYSTACK_BANK_TRANSFER
+  PAYSTACK_USSD
+  PAYSTACK_QR
+  MANUAL_OPAY
+  MANUAL_MONIEPOINT
+  MANUAL_PALMPAY
+  MANUAL_BANK
+}
+
+enum MeetingStatus {
+  UPCOMING
+  ARCHIVED
+  CANCELLED
+}
+
+enum NotificationType {
+  PAYMENT_SUBMITTED
+  PAYMENT_CONFIRMED
+  PAYMENT_REJECTED
+  MEETING_UPDATED
+  REMINDER_SENT
+  PASSWORD_RESET
+}
+
+model User {
+  id               String              @id @default(cuid())
+  fullName         String
+  email            String              @unique
+  phone            String              @unique
+  passwordHash     String
+  role             Role
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  household        Household?
+  payments         Payment[]           @relation("ResidentPayments")
+  confirmations    Payment[]           @relation("PaymentConfirmedBy")
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  refreshSessions  RefreshSession[]
+  passwordResets   PasswordResetToken[]
+}
+
+model Household {
+  id           String    @id @default(cuid())
+  houseNumber  String    @unique
+  block        String?
+  address      String?
+  moveInDate   DateTime?
+  residentId   String    @unique
+  resident     User      @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([houseNumber])
+}
+
+model Levy {
+  id         String      @id @default(cuid())
+  month      Int
+  year       Int
+  amount     Int
+  dueDate    DateTime
+  status     LevyStatus  @default(ACTIVE)
+  estateId   String      @default("greenview-estate")
+  createdAt  DateTime    @default(now())
+  payments   Payment[]
+
+  @@unique([month, year, estateId])
+  @@index([year, month])
+}
+
+model Payment {
+  id               String          @id @default(cuid())
+  levyId           String
+  residentId       String
+  paymentMethod    PaymentMethod
+  amount           Int
+  status           PaymentStatus
+  reference        String          @unique
+  gatewayReference String?
+  gateway          String?
+  receiptUrl       String?
+  note             String?
+  transferDate     DateTime?
+  submittedAt      DateTime?
+  confirmedAt      DateTime?
+  confirmedBy      String?
+  rejectionReason  String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  levy             Levy            @relation(fields: [levyId], references: [id], onDelete: Cascade)
+  resident         User            @relation("ResidentPayments", fields: [residentId], references: [id], onDelete: Cascade)
+  confirmer        User?           @relation("PaymentConfirmedBy", fields: [confirmedBy], references: [id])
+  paymentReceipt   PaymentReceipt?
+
+  @@index([residentId, levyId, status])
+  @@index([submittedAt])
+}
+
+model Meeting {
+  id          String              @id @default(cuid())
+  title       String
+  description String?
+  venue       String
+  meetingDate DateTime
+  status      MeetingStatus       @default(UPCOMING)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  attachments MeetingAttachment[]
+
+  @@index([meetingDate])
+}
+
+model MeetingAttachment {
+  id        String   @id @default(cuid())
+  meetingId  String
+  fileUrl   String
+  mimeType  String
+  fileName  String
+  size      Int
+  createdAt DateTime @default(now())
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  recipientId String
+  type        NotificationType
+  title       String
+  message     String
+  read        Boolean          @default(false)
+  archived    Boolean          @default(false)
+  deleted     Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  recipient   User             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, read])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  userId      String?
+  action      String
+  entity      String
+  entityId    String
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([userId, createdAt])
+}
+
+model PaymentReceipt {
+  id        String   @id @default(cuid())
+  paymentId String   @unique
+  fileUrl   String
+  mimeType  String
+  size      Int
+  createdAt DateTime @default(now())
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+}
+
+model RefreshSession {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model ReceivingAccount {
+  id             String   @id @default(cuid())
+  bankName       String
+  accountName    String
+  accountNumber  String
+  providerKey    String   @unique
+  logoUrl        String?
+  instructions   String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
