@@ -3,6 +3,7 @@
 Greenview Estate Levy Platform is a resident and chairman operations portal for automated levy collection, payment tracking, reminders, meeting notices, and verified receipts.
 
 The system is built as a monorepo with:
+
 - `frontend`: Next.js 15 app for residents and chairman workflows
 - `backend`: NestJS API with Prisma, PostgreSQL, JWT auth, notifications, receipts, and payment processing
 
@@ -28,6 +29,7 @@ The payment flow is intentionally structured as:
 6. Confirmed payments update the invoice and generate a verified receipt.
 
 This design gives you:
+
 - automation for the common case
 - no manual payment review workload for the chairman
 - an audit trail for gateway and contact-management events
@@ -38,12 +40,14 @@ This design gives you:
 This project is wired for **Paystack test mode first**.
 
 That means:
+
 - use Paystack test keys in local development
 - keep `PAYSTACK_MODE=test` in backend environment files
 - keep `NEXT_PUBLIC_PAYMENT_MODE=test` in frontend environment files
 - use the callback page at `/payment/callback`
 
 When you are ready for production:
+
 - replace the Paystack test keys with live keys
 - set `PAYSTACK_MODE=live`
 - set `NEXT_PUBLIC_PAYMENT_MODE=live`
@@ -195,6 +199,7 @@ npm run lint
 ### Database
 
 Core Prisma models include:
+
 - `User`
 - `Household`
 - `Levy`
@@ -240,6 +245,7 @@ When running in test mode:
 - receipt generation still runs so the full lifecycle is tested
 
 This is useful for:
+
 - local development
 - demo environments
 - QA verification
@@ -320,6 +326,7 @@ Before switching to live payment mode:
 - keep `REMINDER_SCHEDULER_ENABLED=true` on one backend instance
 - confirm each occupied house has the correct WhatsApp login number
 - run the full payment lifecycle test suite again
+- when frontend and backend use separate Render domains, set `COOKIE_SECURE=true`, `COOKIE_SAME_SITE=none`, and leave `COOKIE_DOMAIN` empty
 
 ## Troubleshooting
 
