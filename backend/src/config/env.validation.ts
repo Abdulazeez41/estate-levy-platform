@@ -10,6 +10,9 @@ export default function envValidation(config: Record<string, unknown>) {
       throw new Error(`Missing required environment variable: ${key}`);
     }
   }
+  if (String(config.NODE_ENV ?? '').toLowerCase() === 'production' && !config.OTP_SECRET) {
+    throw new Error('Missing required production environment variable: OTP_SECRET');
+  }
 
   const emailProvider = String(config.EMAIL_PROVIDER ?? 'smtp').toLowerCase();
   const smsProvider = String(config.SMS_PROVIDER ?? 'webhook').toLowerCase();
@@ -33,6 +36,14 @@ export default function envValidation(config: Record<string, unknown>) {
       if (!config[key]) {
         throw new Error(`Missing required environment variable for payments: ${key}`);
       }
+    }
+    const expectedSecretPrefix = paystackMode === 'live' ? 'sk_live_' : 'sk_test_';
+    const expectedPublicPrefix = paystackMode === 'live' ? 'pk_live_' : 'pk_test_';
+    if (!String(config.PAYSTACK_SECRET_KEY).startsWith(expectedSecretPrefix)) {
+      throw new Error(`PAYSTACK_SECRET_KEY must be a ${paystackMode} secret key beginning with ${expectedSecretPrefix}`);
+    }
+    if (!String(config.PAYSTACK_PUBLIC_KEY).startsWith(expectedPublicPrefix)) {
+      throw new Error(`PAYSTACK_PUBLIC_KEY must be a ${paystackMode} public key beginning with ${expectedPublicPrefix}`);
     }
   }
 

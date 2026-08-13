@@ -19,13 +19,57 @@ enum LevyStatus {
 
 enum PaymentStatus {
   PENDING_PAYMENT
+  PROCESSING
+  PENDING_REVIEW
   MANUAL_TRANSFER_SUBMITTED
   AWAITING_CONFIRMATION
   CONFIRMED
   REJECTED
   COMPLETED
   FAILED
+  REFUNDED
   CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PROCESSING
+  PENDING_REVIEW
+  CONFIRMED
+  REJECTED
+  OVERDUE
+  FAILED
+  REFUNDED
+}
+
+enum PaymentIntentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentAttemptStatus {
+  INITIALIZED
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum OtpChannel {
+  EMAIL
+  SMS
+  WHATSAPP
 }
 
 enum PaymentMethod {
@@ -47,69 +91,125 @@ enum MeetingStatus {
 
 enum NotificationType {
   PAYMENT_SUBMITTED
+  PAYMENT_PENDING
   PAYMENT_CONFIRMED
   PAYMENT_REJECTED
+  PAYMENT_FAILED
+  PAYMENT_DUE
+  PAYMENT_OVERDUE
   MEETING_UPDATED
   REMINDER_SENT
   PASSWORD_RESET
 }
 
 model User {
-  id               String              @id @default(cuid())
+  id               String               @id @default(cuid())
   fullName         String
-  email            String              @unique
-  phone            String              @unique
-  passwordHash     String
+  email            String               @unique
+  phone            String?              @unique
+  passwordHash     String?
+  loginHouseNumber String?              @unique
   role             Role
-  isActive         Boolean             @default(true)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  isActive         Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   household        Household?
-  payments         Payment[]           @relation("ResidentPayments")
-  confirmations    Payment[]           @relation("PaymentConfirmedBy")
+  payments         Payment[]            @relation("ResidentPayments")
+  invoices         Invoice[]
+  paymentIntents   PaymentIntent[]
+  confirmations    Payment[]            @relation("PaymentConfirmedBy")
   notifications    Notification[]
   auditLogs        AuditLog[]
   refreshSessions  RefreshSession[]
   passwordResets   PasswordResetToken[]
+  otpChallenges    OtpChallenge[]
+}
+
+model OtpChallenge {
+  id                String     @id
+  userId            String
+  channel           OtpChannel
+  codeHash          String
+  destinationMasked String
+  attempts          Int        @default(0)
+  maxAttempts       Int        @default(5)
+  expiresAt         DateTime
+  consumedAt        DateTime?
+  invalidatedAt     DateTime?
+  requestedIp       String?
+  createdAt         DateTime   @default(now())
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([requestedIp, createdAt])
+  @@index([expiresAt])
 }
 
 model Household {
-  id           String    @id @default(cuid())
-  houseNumber  String    @unique
-  block        String?
-  address      String?
-  moveInDate   DateTime?
-  residentId   String    @unique
-  resident     User      @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  houseNumber String    @unique
+  block       String?
+  address     String?
+  moveInDate  DateTime?
+  residentId  String    @unique
+  resident    User      @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  invoices    Invoice[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([houseNumber])
 }
 
 model Levy {
-  id         String      @id @default(cuid())
-  month      Int
-  year       Int
-  amount     Int
-  dueDate    DateTime
-  status     LevyStatus  @default(ACTIVE)
-  estateId   String      @default("greenview-estate")
-  createdAt  DateTime    @default(now())
-  payments   Payment[]
+  id                 String     @id @default(cuid())
+  month              Int
+  year               Int
+  amount             Int
+  currency           String     @default("NGN")
+  dueDate            DateTime
+  reminderDaysBefore Int        @default(3)
+  status             LevyStatus @default(ACTIVE)
+  estateId           String     @default("greenview-estate")
+  createdAt          DateTime   @default(now())
+  payments           Payment[]
+  invoices           Invoice[]
 
   @@unique([month, year, estateId])
   @@index([year, month])
 }
 
+model Invoice {
+  id          String          @id @default(cuid())
+  levyId      String
+  householdId String
+  residentId  String
+  amount      Int
+  currency    String          @default("NGN")
+  dueDate     DateTime
+  status      InvoiceStatus   @default(PENDING_PAYMENT)
+  paidAt      DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  levy        Levy            @relation(fields: [levyId], references: [id], onDelete: Cascade)
+  household   Household       @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  resident    User            @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  payments    Payment[]
+  intents     PaymentIntent[]
+
+  @@unique([levyId, householdId])
+  @@index([residentId, status])
+  @@index([dueDate, status])
+}
+
 model Payment {
-  id               String          @id @default(cuid())
+  id               String           @id @default(cuid())
+  invoiceId        String?
   levyId           String
   residentId       String
   paymentMethod    PaymentMethod
   amount           Int
   status           PaymentStatus
-  reference        String          @unique
+  reference        String           @unique
   gatewayReference String?
   gateway          String?
   receiptUrl       String?
@@ -119,15 +219,75 @@ model Payment {
   confirmedAt      DateTime?
   confirmedBy      String?
   rejectionReason  String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  levy             Levy            @relation(fields: [levyId], references: [id], onDelete: Cascade)
-  resident         User            @relation("ResidentPayments", fields: [residentId], references: [id], onDelete: Cascade)
-  confirmer        User?           @relation("PaymentConfirmedBy", fields: [confirmedBy], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  levy             Levy             @relation(fields: [levyId], references: [id], onDelete: Cascade)
+  resident         User             @relation("ResidentPayments", fields: [residentId], references: [id], onDelete: Cascade)
+  invoice          Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  confirmer        User?            @relation("PaymentConfirmedBy", fields: [confirmedBy], references: [id])
   paymentReceipt   PaymentReceipt?
+  attempts         PaymentAttempt[]
 
   @@index([residentId, levyId, status])
   @@index([submittedAt])
+}
+
+model PaymentIntent {
+  id               String              @id @default(cuid())
+  invoiceId        String
+  residentId       String
+  provider         String
+  reference        String              @unique
+  amount           Int
+  currency         String              @default("NGN")
+  status           PaymentIntentStatus @default(PENDING)
+  authorizationUrl String?
+  accessCode       String?
+  expiresAt        DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  invoice          Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  resident         User                @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  attempts         PaymentAttempt[]
+
+  @@index([invoiceId, status])
+  @@index([residentId, createdAt])
+}
+
+model PaymentAttempt {
+  id               String               @id @default(cuid())
+  intentId         String
+  paymentId        String?
+  status           PaymentAttemptStatus @default(INITIALIZED)
+  gatewayReference String?
+  responseCode     String?
+  responseMessage  String?
+  providerResponse Json?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  intent           PaymentIntent        @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  payment          Payment?             @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([intentId, createdAt])
+  @@index([paymentId])
+}
+
+model WebhookEvent {
+  id          String             @id @default(cuid())
+  provider    String
+  eventId     String
+  eventType   String
+  reference   String?
+  signature   String?
+  status      WebhookEventStatus @default(RECEIVED)
+  payload     Json
+  error       String?
+  processedAt DateTime?
+  createdAt   DateTime           @default(now())
+
+  @@unique([provider, eventId])
+  @@index([reference, createdAt])
+  @@index([status, createdAt])
 }
 
 model Meeting {
@@ -146,7 +306,7 @@ model Meeting {
 
 model MeetingAttachment {
   id        String   @id @default(cuid())
-  meetingId  String
+  meetingId String
   fileUrl   String
   mimeType  String
   fileName  String
@@ -163,6 +323,7 @@ model Notification {
   type        NotificationType
   title       String
   message     String
+  dedupeKey   String?          @unique
   read        Boolean          @default(false)
   archived    Boolean          @default(false)
   deleted     Boolean          @default(false)
@@ -173,17 +334,17 @@ model Notification {
 }
 
 model AuditLog {
-  id          String    @id @default(cuid())
-  userId      String?
-  action      String
-  entity      String
-  entityId    String
-  oldValue    Json?
-  newValue    Json?
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime  @default(now())
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String
+  oldValue  Json?
+  newValue  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([entity, entityId])
   @@index([userId, createdAt])
@@ -200,38 +361,38 @@ model PaymentReceipt {
 }
 
 model RefreshSession {
-  id          String   @id @default(cuid())
-  userId      String
-  tokenHash   String
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
 }
 
 model PasswordResetToken {
-  id         String   @id @default(cuid())
-  userId     String
-  tokenHash  String   @unique
-  expiresAt  DateTime
-  usedAt     DateTime?
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
 }
 
 model ReceivingAccount {
-  id             String   @id @default(cuid())
-  bankName       String
-  accountName    String
-  accountNumber  String
-  providerKey    String   @unique
-  logoUrl        String?
-  instructions   String?
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(cuid())
+  bankName      String
+  accountName   String
+  accountNumber String
+  providerKey   String   @unique
+  logoUrl       String?
+  instructions  String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

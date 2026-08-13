@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -8,8 +8,61 @@ export class HouseholdsService {
 
   private mapStatus(status?: PaymentStatus | null) {
     if (status === PaymentStatus.COMPLETED || status === PaymentStatus.CONFIRMED) return 'paid';
-    if (status === PaymentStatus.AWAITING_CONFIRMATION || status === PaymentStatus.MANUAL_TRANSFER_SUBMITTED || status === PaymentStatus.PENDING_PAYMENT) return 'pending';
+    if (status === PaymentStatus.PROCESSING) return 'processing';
     return 'overdue';
+  }
+
+  private normalizeWhatsAppNumber(value: string) {
+    const compact = value.replace(/[\s()-]/g, '');
+    return compact.startsWith('0') ? `+234${compact.slice(1)}` : compact;
+  }
+
+  async updateWhatsApp(householdId: string, value: string, chairmanId: string) {
+    const household = await this.prisma.household.findUnique({ where: { id: householdId }, include: { resident: true } });
+    if (!household) throw new NotFoundException('Household not found');
+
+    const phone = this.normalizeWhatsAppNumber(value);
+    const owner = await this.prisma.user.findFirst({ where: { phone, id: { not: household.residentId } }, select: { id: true } });
+    if (owner) throw new ConflictException('This WhatsApp number is already assigned to another house.');
+
+    const oldPhone = household.resident.phone;
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: household.residentId }, data: { phone } }),
+      this.prisma.otpChallenge.updateMany({ where: { userId: household.residentId, consumedAt: null, invalidatedAt: null }, data: { invalidatedAt: new Date() } }),
+      this.prisma.auditLog.create({
+        data: {
+          userId: chairmanId,
+          action: oldPhone ? 'WHATSAPP_CONTACT_UPDATED' : 'WHATSAPP_CONTACT_ADDED',
+          entity: 'User',
+          entityId: household.residentId,
+          oldValue: { phone: oldPhone },
+          newValue: { phone, houseNumber: household.houseNumber },
+        },
+      }),
+    ]);
+    return { phone };
+  }
+
+  async deleteWhatsApp(householdId: string, chairmanId: string) {
+    const household = await this.prisma.household.findUnique({ where: { id: householdId }, include: { resident: true } });
+    if (!household) throw new NotFoundException('Household not found');
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: household.residentId }, data: { phone: null } }),
+      this.prisma.otpChallenge.updateMany({ where: { userId: household.residentId, consumedAt: null, invalidatedAt: null }, data: { invalidatedAt: new Date() } }),
+      this.prisma.refreshSession.updateMany({ where: { userId: household.residentId, revokedAt: null }, data: { revokedAt: new Date() } }),
+      this.prisma.auditLog.create({
+        data: {
+          userId: chairmanId,
+          action: 'WHATSAPP_CONTACT_REMOVED',
+          entity: 'User',
+          entityId: household.residentId,
+          oldValue: { phone: household.resident.phone },
+          newValue: { phone: null, houseNumber: household.houseNumber },
+        },
+      }),
+    ]);
+    return { phone: null };
   }
 
   async findAll(query?: string, filter?: string) {
@@ -31,7 +84,7 @@ export class HouseholdsService {
           houseNumber: household.houseNumber,
           phone: household.resident.phone,
           email: household.resident.email,
-          currentStatus: this.mapStatus(latest?.status),
+          currentStatus: latest ? this.mapStatus(latest.status) : levy.dueDate.getTime() < Date.now() ? 'overdue' : 'pending',
           referenceNumber: latest?.reference ?? null,
         };
       })
@@ -65,7 +118,7 @@ export class HouseholdsService {
         email: household.resident.email,
         phone: household.resident.phone,
       },
-      currentStatus: this.mapStatus(latestPayment?.status),
+      currentStatus: latestPayment ? this.mapStatus(latestPayment.status) : currentLevy && currentLevy.dueDate.getTime() < Date.now() ? 'overdue' : 'pending',
       currentOutstandingBalance: latestPayment && (latestPayment.status === PaymentStatus.COMPLETED || latestPayment.status === PaymentStatus.CONFIRMED) ? 0 : currentLevy?.amount ?? 0,
       paymentHistory: household.resident.payments.map((payment) => ({
         id: payment.id,

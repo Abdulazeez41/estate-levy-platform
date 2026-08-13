@@ -21,9 +21,8 @@ export class ManualPaymentDto {
   @IsString()
   reference!: string;
 
-  @IsOptional()
   @IsString()
-  receiptUrl?: string;
+  receiptUrl!: string;
 
   @IsOptional()
   @IsString()

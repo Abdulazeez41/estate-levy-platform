@@ -1,6 +1,6 @@
 # Estate Levy Platform
 
-Greenview Estate Levy Platform is a resident and chairman operations portal for levy collection, payment tracking, reminders, meeting notices, and proof-of-payment review.
+Greenview Estate Levy Platform is a resident and chairman operations portal for automated levy collection, payment tracking, reminders, meeting notices, and verified receipts.
 
 The system is built as a monorepo with:
 - `frontend`: Next.js 15 app for residents and chairman workflows
@@ -8,11 +8,11 @@ The system is built as a monorepo with:
 
 ## What the platform does
 
-- Residents sign in with their own account
-- Residents can pay online through Paystack test mode or submit bank transfer proof with receipt upload
-- The dashboard shows payment status in real time
-- The chairman can maintain the official receiving account details
-- The chairman can approve or reject manual submissions
+- Residents and the chairman use one passwordless house-number login with a six-digit WhatsApp code
+- Residents pay online through Paystack; manual transfers and receipt uploads are disabled
+- The dashboard polls verified backend state every 10-15 seconds
+- The chairman creates levy cycles that automatically generate one invoice per household
+- The chairman can add, update, or remove each household's WhatsApp login number
 - Payment confirmations generate receipts and notifications
 - Meeting notices and reminders appear in the resident experience
 
@@ -21,17 +21,16 @@ The system is built as a monorepo with:
 The payment flow is intentionally structured as:
 
 1. Resident opens the payment form from the dashboard.
-2. The form defaults to online payment first.
-3. If the resident prefers bank transfer, they can switch to the manual transfer path.
-4. Online payments are initialized through Paystack and verified on the backend.
-5. Manual transfers are submitted with a receipt upload for chairman review.
-6. Approved payments become confirmed and can generate a receipt.
-7. Rejected payments remain visible with a rejection reason.
+2. The backend creates a unique Paystack payment reference for the resident invoice.
+3. The resident completes checkout using a method offered by Paystack.
+4. The backend verifies the transaction reference, amount, and currency.
+5. A signed Paystack webhook reconciles the payment idempotently.
+6. Confirmed payments update the invoice and generate a verified receipt.
 
 This design gives you:
 - automation for the common case
-- a fallback for residents who pay by transfer
-- a clear audit trail for the chairman
+- no manual payment review workload for the chairman
+- an audit trail for gateway and contact-management events
 - status updates that the resident can trust
 
 ## Test mode first
@@ -104,15 +103,18 @@ PAYSTACK_MODE=test
 PAYSTACK_SECRET_KEY=sk_test_...
 PAYSTACK_PUBLIC_KEY=pk_test_...
 PAYSTACK_CALLBACK_URL=http://localhost:3000/payment/callback
-PAYSTACK_WEBHOOK_SECRET=whsec_...
+PAYSTACK_WEBHOOK_SECRET=sk_test_...
 REDIS_URL=redis://localhost:6379
+REMINDER_SCHEDULER_ENABLED=true
 ```
+
+Paystack test credentials must come from the Paystack Dashboard. Test public keys begin with `pk_test_`; test secret keys begin with `sk_test_`. Do not use JWT secrets or generated application secrets in these fields.
 
 ### 4. Prepare the database
 
 ```bash
 cd backend
-npx prisma migrate dev --name init
+npx prisma migrate dev
 npm run seed
 ```
 
@@ -131,11 +133,13 @@ npm run dev
 - API docs: `http://localhost:4000/api/docs`
 - Paystack callback: `http://localhost:3000/payment/callback`
 
-## Seed accounts
+## Seed household access
 
-- Chairman: `chairman@greenview.test`
-- Resident: `adewale@greenview.test`
-- Password for both: `Password123!`
+- Chairman house: `Block A, Flat 1`
+- Resident houses: the remaining 58 houses, from `Block A, Flat 2` through `Block J, Flat 5`
+- The seed creates exactly 59 selectable house identities: one chairman and 58 residents.
+- In local development, the WhatsApp OTP appears on the verification screen unless `OTP_DELIVERY_IN_DEVELOPMENT=true`.
+- Production WhatsApp delivery requires Meta Cloud API, Twilio, or a compatible webhook. Provider pricing and conversation rules still apply.
 
 ## Repository scripts
 
@@ -170,25 +174,23 @@ npm run lint
 
 ### Frontend
 
-- Resident dashboard with levy status, payment history, receipt previews, and current submission details
-- Chairman dashboard with collection summary, payment review queue, and receiving account settings
-- Payment dialog for:
-  - Paystack online checkout
-  - manual bank transfer submission
-  - receipt upload
-- Receipt preview modal for image and PDF receipts
+- Resident dashboard with levy status, Paystack checkout, and verified payment history
+- Chairman dashboard with collection summary and household WhatsApp contact management
+- Chairman levy-cycle form that generates household invoices
+- Paystack-only payment dialog
 - Responsive glass-style UI with motion enhancements
 
 ### Backend
 
 - JWT authentication
 - household and levy dashboards
-- payment initialization, verification, and manual submission handling
-- chairman approval and rejection flows
+- Paystack initialization and verification
+- signed, idempotent webhook reconciliation with retry processing
+- scheduled due and overdue notifications
 - receipt generation
 - notification dispatch
 - reminder services
-- upload handling for receipts and meeting attachments
+- upload handling for meeting attachments
 
 ### Database
 
@@ -196,7 +198,11 @@ Core Prisma models include:
 - `User`
 - `Household`
 - `Levy`
+- `Invoice`
 - `Payment`
+- `PaymentIntent`
+- `PaymentAttempt`
+- `WebhookEvent`
 - `PaymentReceipt`
 - `ReceivingAccount`
 - `Meeting`
@@ -211,21 +217,17 @@ Core Prisma models include:
 The platform uses these key statuses:
 
 - `PENDING_PAYMENT`
-- `MANUAL_TRANSFER_SUBMITTED`
-- `AWAITING_CONFIRMATION`
+- `PROCESSING`
 - `CONFIRMED`
 - `COMPLETED`
-- `REJECTED`
 - `FAILED`
+- `REFUNDED`
 - `CANCELLED`
 
 Typical interpretation:
 
 - `PENDING_PAYMENT`: payment has not been completed yet
-- `MANUAL_TRANSFER_SUBMITTED`: resident uploaded transfer proof
-- `AWAITING_CONFIRMATION`: payment is waiting for review or verification
 - `CONFIRMED` or `COMPLETED`: payment has been accepted
-- `REJECTED`: payment proof or transfer was rejected
 
 ## Payment behavior in test mode
 
@@ -247,20 +249,23 @@ This is useful for:
 
 The system prepares notifications for:
 
-- payment submitted
 - payment confirmed
-- payment rejected
+- payment failed
+- payment due
+- payment overdue
 - meeting updates
 - reminders
 - password reset
 
-Notifications are shown in-app and can be extended to email, SMS, or WhatsApp based on environment configuration.
+Notifications are shown in-app and can use configured provider channels. Login verification itself is WhatsApp-only.
 
 ## API endpoints
 
 ### Authentication
 
-- `POST /api/auth/login`
+- `GET /api/auth/houses?query=`
+- `POST /api/auth/otp/request`
+- `POST /api/auth/otp/verify`
 - `POST /api/auth/refresh`
 - `POST /api/auth/logout`
 
@@ -271,15 +276,20 @@ Notifications are shown in-app and can be extended to email, SMS, or WhatsApp ba
 
 ### Payments
 
-- `GET /api/payments/receiving-account`
-- `GET /api/payments/receiving-accounts`
-- `PATCH /api/payments/receiving-account`
-- `POST /api/payments/manual-submissions`
 - `POST /api/payments/paystack/initialize`
 - `POST /api/payments/paystack/verify`
 - `POST /api/payments/paystack/webhook`
-- `PATCH /api/payments/:id/approve`
-- `PATCH /api/payments/:id/reject`
+
+### Household WhatsApp access
+
+- `PATCH /api/households/:id/whatsapp` (chairman only; recent OTP required)
+- `DELETE /api/households/:id/whatsapp` (chairman only; recent OTP required)
+
+### Levies and invoices
+
+- `GET /api/levies`
+- `POST /api/levies`
+- `POST /api/levies/:id/sync-invoices`
 
 ### Meetings
 
@@ -306,7 +316,9 @@ Before switching to live payment mode:
 - confirm the webhook endpoint is publicly reachable
 - verify the callback URL is correct in Paystack
 - confirm Redis and PostgreSQL are stable in production
-- confirm chairman receiving account details are correct
+- use a Render persistent disk or external object storage for generated verified receipts
+- keep `REMINDER_SCHEDULER_ENABLED=true` on one backend instance
+- confirm each occupied house has the correct WhatsApp login number
 - run the full payment lifecycle test suite again
 
 ## Troubleshooting
@@ -330,16 +342,19 @@ Before switching to live payment mode:
 - confirm the raw body reaches the webhook handler
 - confirm the signature header is being sent by the provider
 
-### Manual transfer cannot be submitted
+### WhatsApp login code is not delivered
 
-- confirm the chairman has created an active receiving account
-- confirm the resident is submitting for their own household
-- confirm the receipt file is under the maximum upload size
+- confirm the household has a WhatsApp number saved by the chairman
+- confirm `WHATSAPP_PROVIDER` and its provider credentials are configured
+- keep `OTP_DELIVERY_IN_DEVELOPMENT=false` locally to show the test code on screen
 
 ## Development notes
 
 - The frontend uses a glass-style visual language with responsive motion
 - The resident dashboard is intentionally wide and full-page rather than narrow-centered
-- Receipt previews are reusable across resident and chairman screens
-- Payment approvals generate receipts and notifications
+- Confirmed Paystack payments generate verified receipts and notifications
 - Backend tests cover the payment lifecycle and notification state changes
+
+## Suggested next step
+
+If you are moving beyond test mode, the next step is to switch the Paystack credentials from test keys to live keys and perform a full end-to-end payment rehearsal in staging before opening the system to residents.

@@ -13,6 +13,7 @@ import { ReceiptsModule } from './receipts/receipts.module';
 import { JobsModule } from './jobs/jobs.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { HealthController } from './health.controller';
+import { LeviesModule } from './levies/levies.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { HealthController } from './health.controller';
     ReceiptsModule,
     JobsModule,
     RemindersModule,
+    LeviesModule,
   ],
   controllers: [HealthController],
 })

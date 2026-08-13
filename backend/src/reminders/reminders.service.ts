@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { NotificationType, PaymentStatus } from '@prisma/client';
+import { InvoiceStatus, LevyStatus, NotificationType, PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -11,6 +11,47 @@ export class RemindersService {
   ) {}
 
   private readonly cooldownHours = 24;
+
+  async processScheduledReminders(now = new Date()) {
+    const levies = await this.prisma.levy.findMany({
+      where: { status: LevyStatus.ACTIVE },
+      include: { invoices: { include: { resident: true, household: true } } },
+    });
+    let dueSent = 0;
+    let overdueSent = 0;
+    for (const levy of levies) {
+      const dueReminderAt = new Date(levy.dueDate.getTime() - levy.reminderDaysBefore * 86400000);
+      for (const invoice of levy.invoices) {
+        if (invoice.status === InvoiceStatus.CONFIRMED || invoice.status === InvoiceStatus.REFUNDED || invoice.status === InvoiceStatus.PENDING_REVIEW || invoice.status === InvoiceStatus.PROCESSING) continue;
+        if (now.getTime() > invoice.dueDate.getTime()) {
+          if (invoice.status !== InvoiceStatus.OVERDUE) await this.prisma.invoice.update({ where: { id: invoice.id }, data: { status: InvoiceStatus.OVERDUE } });
+          const day = now.toISOString().slice(0, 10);
+          await this.notificationsService.dispatchToUser({
+            recipientId: invoice.residentId,
+            type: NotificationType.PAYMENT_OVERDUE,
+            title: 'Levy payment overdue',
+            message: `${invoice.currency} ${invoice.amount.toLocaleString()} for ${invoice.household.houseNumber} is overdue. Please pay securely through Paystack.`,
+            channels: ['in_app', 'sms', 'whatsapp', 'email'],
+            metadata: { invoiceId: invoice.id, levyId: levy.id },
+            dedupeKey: `invoice:${invoice.id}:overdue:${day}`,
+          });
+          overdueSent += 1;
+        } else if (now.getTime() >= dueReminderAt.getTime()) {
+          await this.notificationsService.dispatchToUser({
+            recipientId: invoice.residentId,
+            type: NotificationType.PAYMENT_DUE,
+            title: 'Levy payment due soon',
+            message: `${invoice.currency} ${invoice.amount.toLocaleString()} for ${invoice.household.houseNumber} is due on ${invoice.dueDate.toLocaleDateString()}.`,
+            channels: ['in_app', 'sms', 'whatsapp', 'email'],
+            metadata: { invoiceId: invoice.id, levyId: levy.id },
+            dedupeKey: `invoice:${invoice.id}:due`,
+          });
+          dueSent += 1;
+        }
+      }
+    }
+    return { dueSent, overdueSent };
+  }
 
   private async canSendReminder(recipientId: string) {
     const cutoff = new Date(Date.now() - this.cooldownHours * 60 * 60 * 1000);
@@ -48,8 +89,8 @@ export class RemindersService {
       recipientId: household.residentId,
       type: NotificationType.REMINDER_SENT,
       title: 'Levy reminder',
-      message: `This is a reminder to settle your current estate levy for ${household.houseNumber}. Please upload proof immediately after transfer.`,
-      channels: ['in_app', 'sms', 'whatsapp', 'email'],
+      message: `This is a reminder to settle your current estate levy for ${household.houseNumber}. Please pay securely through Paystack.`,
+      channels: ['in_app', 'whatsapp'],
       metadata: { householdId },
     });
 

@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { createWriteStream, statSync } from 'fs';
 import { mkdir } from 'fs/promises';
 import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import type { AuthenticatedRequestUser } from '../common/decorators/current-user.decorator';
 
 @Injectable()
 export class ReceiptsService {
@@ -89,9 +91,10 @@ export class ReceiptsService {
     return { fileUrl: receiptUrl };
   }
 
-  async getReceiptByPaymentId(paymentId: string) {
-    const receipt = await this.prisma.paymentReceipt.findUnique({ where: { paymentId } });
-    if (!receipt) throw new NotFoundException('Receipt not found');
-    return receipt;
+  async getReceiptByPaymentId(paymentId: string, user: AuthenticatedRequestUser) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId }, include: { paymentReceipt: true } });
+    if (!payment?.paymentReceipt) throw new NotFoundException('Receipt not found');
+    if (user.role !== Role.CHAIRMAN && payment.residentId !== user.sub) throw new ForbiddenException('You cannot access this receipt');
+    return payment.paymentReceipt;
   }
 }

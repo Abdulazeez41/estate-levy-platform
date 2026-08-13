@@ -6,6 +6,8 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RequestOtpDto } from './dto/request-otp.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -19,8 +21,25 @@ export class AuthController {
       sameSite: 'lax' as const,
       domain: process.env.COOKIE_DOMAIN || undefined,
       path: '/',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: Number(process.env.TRUSTED_DEVICE_DAYS ?? 30) * 24 * 60 * 60 * 1000,
     };
+  }
+
+  @Get('houses')
+  houses(@Query('query') query = '') {
+    return this.authService.searchHouses(query);
+  }
+
+  @Post('otp/request')
+  requestOtp(@Body() dto: RequestOtpDto, @Req() req: Request) {
+    return this.authService.requestOtp(dto, req.ip);
+  }
+
+  @Post('otp/verify')
+  async verifyOtp(@Body() dto: VerifyOtpDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.verifyOtp(dto);
+    res.cookie('estate_refresh_token', result.refreshToken, this.cookieOptions());
+    return result;
   }
 
   @Post('login')

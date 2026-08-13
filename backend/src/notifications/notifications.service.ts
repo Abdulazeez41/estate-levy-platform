@@ -43,13 +43,19 @@ export class NotificationsService {
     message: string;
     channels?: DeliveryChannel[];
     metadata?: Record<string, unknown>;
+    dedupeKey?: string;
   }) {
+    if (input.dedupeKey) {
+      const existing = await this.prisma.notification.findUnique({ where: { dedupeKey: input.dedupeKey } });
+      if (existing) return existing;
+    }
     const notification = await this.prisma.notification.create({
       data: {
         recipientId: input.recipientId,
         type: input.type,
         title: input.title,
         message: input.message,
+        dedupeKey: input.dedupeKey,
       },
     });
 

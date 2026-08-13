@@ -14,14 +14,6 @@ import { UploadsService } from './uploads.service';
 export class UploadsController {
   constructor(private readonly uploadsService: UploadsService) {}
 
-  @Post('receipts')
-  @Roles(Role.RESIDENT, Role.CHAIRMAN)
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
-  uploadReceipt(@UploadedFile() file: Express.Multer.File) {
-    return this.uploadsService.uploadReceipt(file);
-  }
-
   @Post('meeting-attachments')
   @Roles(Role.CHAIRMAN)
   @ApiConsumes('multipart/form-data')

@@ -4,6 +4,8 @@ export interface AuthenticatedRequestUser {
   sub: string;
   email: string;
   role: 'CHAIRMAN' | 'RESIDENT';
+  houseNumber?: string | null;
+  authTime?: number;
 }
 
 export const CurrentUser = createParamDecorator((_: unknown, context: ExecutionContext) => {

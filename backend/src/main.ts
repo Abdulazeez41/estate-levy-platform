@@ -2,6 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import { type NextFunction, type Request, type Response } from 'express';
 import { join } from 'path';
 import express from 'express';
 import { AppModule } from './app.module';
@@ -13,6 +14,18 @@ async function bootstrap() {
       credentials: true,
     },
     rawBody: true,
+  });
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'GET' && req.path === '/') {
+      return res.json({
+        name: 'Estate Levy Platform API',
+        status: 'ok',
+        health: '/api/health',
+        docs: '/api/docs',
+      });
+    }
+    return next();
   });
 
   app.setGlobalPrefix('api');
