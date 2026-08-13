@@ -5,6 +5,7 @@ export interface AuthUser {
   fullName: string;
   email: string;
   role: UserRole;
+  houseNumber?: string | null;
 }
 
 export interface LoginResponse {
@@ -40,9 +41,9 @@ export interface ChairmanHouseholdRow {
   householdId: string;
   residentName: string;
   houseNumber: string;
-  phone: string;
+  phone: string | null;
   email: string;
-  currentStatus: 'paid' | 'pending' | 'overdue' | 'rejected';
+  currentStatus: 'paid' | 'pending' | 'processing' | 'overdue' | 'rejected';
   referenceNumber?: string;
 }
 
@@ -59,6 +60,15 @@ export interface PendingApproval {
 
 export interface ChairmanDashboardResponse {
   currentLevyMonth: string;
+  currentLevy: {
+    id: string;
+    month: number;
+    year: number;
+    amount: number;
+    currency: string;
+    dueDate: string;
+    reminderDaysBefore: number;
+  };
   receivingAccount?: ReceivingAccount | null;
   stats: {
     totalExpected: number;
@@ -76,13 +86,16 @@ export interface ChairmanDashboardResponse {
 
 export interface ResidentDashboardResponse {
   currentLevyId: string;
+  currentInvoiceId?: string | null;
   residentId: string;
   currentLevyMonth: string;
   receivingAccount?: ReceivingAccount | null;
   residentName: string;
   houseNumber: string;
   currentLevyAmount: number;
-  status: 'paid' | 'pending' | 'overdue' | 'rejected';
+  currency?: string;
+  invoiceStatus?: string | null;
+  status: 'paid' | 'pending' | 'processing' | 'overdue' | 'rejected';
   dueDate: string;
   submittedAt?: string | null;
   currentPayment?: {
@@ -141,9 +154,9 @@ export interface HouseholdDetail {
     id: string;
     fullName: string;
     email: string;
-    phone: string;
+    phone: string | null;
   };
-  currentStatus: 'paid' | 'pending' | 'overdue' | 'rejected';
+  currentStatus: 'paid' | 'pending' | 'processing' | 'overdue' | 'rejected';
   currentOutstandingBalance: number;
   paymentHistory: Array<{
     id: string;

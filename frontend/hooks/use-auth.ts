@@ -20,6 +20,17 @@ export function useAuth() {
     }
   };
 
+  const verifyOtp = async (payload: { challengeId: string; code: string }) => {
+    setIsLoading(true);
+    try {
+      const response = await authService.verifyOtp(payload);
+      setSession(response);
+      return response.user;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     try {
       await authService.logout();
@@ -29,5 +40,5 @@ export function useAuth() {
     }
   };
 
-  return { user, login, logout, isLoading };
+  return { user, login, verifyOtp, logout, isLoading };
 }

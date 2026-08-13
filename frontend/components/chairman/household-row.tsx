@@ -14,7 +14,7 @@ export function HouseholdRow({ household, onRemind }: { household: ChairmanHouse
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-wash font-semibold text-green-deep">{initials(household.residentName)}</div>
         <div>
           <div className="text-base font-medium text-ink">{household.residentName}</div>
-          <div className="mt-1 text-sm text-ink-soft">{household.houseNumber} · {household.phone}</div>
+          <div className="mt-1 text-sm text-ink-soft">{household.houseNumber} · {household.phone ?? 'No WhatsApp number'}</div>
         </div>
       </Link>
       <div className="flex items-center gap-3">

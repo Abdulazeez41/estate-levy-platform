@@ -19,10 +19,7 @@ export function PendingPaymentCard({ payment, onApprove, onReject }: PendingPaym
           {payment.paymentMethod} · {payment.reference}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-2 rounded-full bg-green-wash px-3 py-1 text-xs font-semibold text-green-deep">
-            <FileText className="h-3.5 w-3.5" />
-            Receipt attached
-          </span>
+          {payment.receiptUrl ? <span className="inline-flex items-center gap-2 rounded-full bg-green-wash px-3 py-1 text-xs font-semibold text-green-deep"><FileText className="h-3.5 w-3.5" />Receipt attached</span> : null}
           {payment.receiptUrl ? (
             <>
               <a

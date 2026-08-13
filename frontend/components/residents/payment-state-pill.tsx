@@ -1,16 +1,19 @@
 import { AlertTriangle, CheckCircle2, Clock3, XCircle, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type PaymentState = 'PENDING_PAYMENT' | 'MANUAL_TRANSFER_SUBMITTED' | 'AWAITING_CONFIRMATION' | 'CONFIRMED' | 'COMPLETED' | 'REJECTED' | 'FAILED' | 'CANCELLED';
+type PaymentState = 'PENDING_PAYMENT' | 'PROCESSING' | 'PENDING_REVIEW' | 'MANUAL_TRANSFER_SUBMITTED' | 'AWAITING_CONFIRMATION' | 'CONFIRMED' | 'COMPLETED' | 'REJECTED' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
 
 const config: Record<PaymentState, { label: string; className: string; icon: LucideIcon }> = {
-  PENDING_PAYMENT: { label: 'Pending', className: 'border-amber bg-amber-wash text-amber', icon: Clock3 },
+  PENDING_PAYMENT: { label: 'Payment due', className: 'border-amber bg-amber-wash text-amber', icon: Clock3 },
+  PROCESSING: { label: 'Processing', className: 'border-amber bg-amber-wash text-amber', icon: Clock3 },
+  PENDING_REVIEW: { label: 'Pending review', className: 'border-amber bg-amber-wash text-amber', icon: Clock3 },
   MANUAL_TRANSFER_SUBMITTED: { label: 'Pending', className: 'border-amber bg-amber-wash text-amber', icon: Clock3 },
   AWAITING_CONFIRMATION: { label: 'Pending', className: 'border-amber bg-amber-wash text-amber', icon: Clock3 },
   CONFIRMED: { label: 'Confirmed', className: 'border-green-bright bg-green-wash text-green-deep', icon: CheckCircle2 },
   COMPLETED: { label: 'Confirmed', className: 'border-green-bright bg-green-wash text-green-deep', icon: CheckCircle2 },
   REJECTED: { label: 'Rejected', className: 'border-rust bg-rust-wash text-rust', icon: XCircle },
   FAILED: { label: 'Failed', className: 'border-rust bg-rust-wash text-rust', icon: AlertTriangle },
+  REFUNDED: { label: 'Refunded', className: 'border-line bg-paper text-ink-soft', icon: CheckCircle2 },
   CANCELLED: { label: 'Cancelled', className: 'border-line bg-paper text-ink-soft', icon: XCircle },
 };
 
