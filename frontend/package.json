@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "prebuild": "node scripts/verify-source.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
