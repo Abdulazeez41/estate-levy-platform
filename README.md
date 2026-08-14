@@ -142,8 +142,38 @@ npm run dev
 - Chairman house: `Block A, Flat 1`
 - Resident houses: the remaining 58 houses, from `Block A, Flat 2` through `Block J, Flat 5`
 - The seed creates exactly 59 selectable house identities: one chairman and 58 residents.
+- Set `SEED_CHAIRMAN_PHONE` and `SEED_RESIDENT_PHONE` to different E.164 WhatsApp numbers before a hosted test seed. `SEED_RESIDENT_HOUSE` defaults to the unpaid `Block D, Flat 1` account.
 - In local development, the WhatsApp OTP appears on the verification screen unless `OTP_DELIVERY_IN_DEVELOPMENT=true`.
 - Production WhatsApp delivery requires Meta Cloud API, Twilio, or a compatible webhook. Provider pricing and conversation rules still apply.
+
+### One-time Render seed
+
+The seed resets all application records. Never leave it in a normal build, start, or pre-deploy command. On the backend service, temporarily set:
+
+```bash
+ALLOW_DESTRUCTIVE_SEED=true
+SEED_CHAIRMAN_PHONE=+2348012345678
+SEED_RESIDENT_PHONE=+2348098765432
+SEED_RESIDENT_HOUSE=Block D, Flat 1
+```
+
+If the backend Render service root directory is `backend`, temporarily use this pre-deploy command:
+
+```bash
+npx prisma migrate deploy && npm run seed
+```
+
+If its root directory is empty, use the workspace-aware equivalent:
+
+```bash
+npx prisma migrate deploy --schema backend/prisma/schema.prisma && npm run seed --workspace backend
+```
+
+Deploy once, confirm that the seed completed, then immediately change the pre-deploy command to migration-only and delete `ALLOW_DESTRUCTIVE_SEED`, `SEED_CHAIRMAN_PHONE`, `SEED_RESIDENT_PHONE`, and `SEED_RESIDENT_HOUSE` from Render. Keep only:
+
+```bash
+npx prisma migrate deploy
+```
 
 ## Repository scripts
 
@@ -173,6 +203,22 @@ npm run dev
 npm run build
 npm run lint
 ```
+
+### Render frontend build
+
+For this npm-workspaces repository, keep the Render frontend service root directory empty (repository root) and use:
+
+```bash
+npm install --include=dev && npm run build --workspace frontend
+```
+
+Start it with:
+
+```bash
+npm run start --workspace frontend
+```
+
+The frontend prebuild checks that shared hooks and components are present before Next.js starts. Node.js is pinned to version 22 for consistent local and Render builds.
 
 ## Implementation overview
 
