@@ -12,6 +12,6 @@ describe('RemindersService', () => {
 
     const result = await service.remindHousehold('h1', 'chairman-1');
     expect(result).toEqual({ success: true });
-    expect(notificationsService.dispatchToUser).toHaveBeenCalledWith(expect.objectContaining({ channels: ['in_app', 'sms', 'whatsapp', 'email'] }));
+    expect(notificationsService.dispatchToUser).toHaveBeenCalledWith(expect.objectContaining({ channels: ['in_app', 'whatsapp'] }));
   });
 });

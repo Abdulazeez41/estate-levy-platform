@@ -128,7 +128,7 @@ export class ChannelAdaptersService {
         `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
         {
           messaging_product: 'whatsapp',
-          to: payload.phone,
+          to: payload.phone.replace(/^\+/, ''),
           type: 'text',
           text: { preview_url: false, body: `${payload.title}\n\n${payload.message}` },
         },
@@ -142,8 +142,9 @@ export class ChannelAdaptersService {
       const authToken = process.env.TWILIO_AUTH_TOKEN;
       const from = process.env.TWILIO_WHATSAPP_FROM;
       if (!accountSid || !authToken || !from) return { delivered: false, channel: 'whatsapp', provider };
-      const normalizedFrom = from.startsWith('whatsapp:') ? from : `whatsapp:${from}`;
-      const normalizedTo = payload.phone.startsWith('whatsapp:') ? payload.phone : `whatsapp:${payload.phone}`;
+      const normalizedFrom = from.startsWith('whatsapp:') ? from : `whatsapp:${from.startsWith('+') ? from : '+' + from}`;
+      const phoneDigits = payload.phone.startsWith('+') ? payload.phone : `+${payload.phone}`;
+      const normalizedTo = payload.phone.startsWith('whatsapp:') ? payload.phone : `whatsapp:${phoneDigits}`;
       const body = new URLSearchParams({ To: normalizedTo, From: normalizedFrom, Body: `${payload.title}\n\n${payload.message}` });
       await axios.post(
         `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
